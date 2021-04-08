@@ -4,10 +4,12 @@ import { AppService } from './app.service';
 require('dotenv').config()
 const fs = require('fs')
 import {constants} from 'fs'
+import { SonosService } from './sonos/sonos.service';
 
 @Controller()
 export class AppController {
-    constructor(private readonly appService: AppService) { }
+    constructor(private readonly appService: AppService,
+                private sonosService: SonosService) { }
     
     @Get()
     @Render('config')
@@ -30,4 +32,11 @@ export class AppController {
         
         return data;
     }
+
+    @Get('info')
+    async info() {
+        this.sonosService.playSongFromPlaylist('lounge', 'spotify:album:0qn1jsJoxn1TsgkDqP9pP9', 6)
+        return;
+    }
+
 }

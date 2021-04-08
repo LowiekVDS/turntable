@@ -5,7 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { SonosModule } from './sonos/sonos.module';
 
 @Module({
-  imports: [AuthModule, SonosModule],
+  imports: [SonosModule],
   controllers: [AppController],
   providers: [AppService],
 })
