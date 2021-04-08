@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<head>
+    <title>Turntable - config</title>
+</head>
+<body>
+    <h1>Turntable configuration page</h1>
+    <div>
+        <h2>Status</h2>
+        <p>Sonos: 
+            {{#if sonos_status}}
+                <b>OK</b>
+            {{else}}
+                <button onclick="window.location.href='{{sonos_auth_url}}'">Authorize</button>
+            {{/if}}
+        </p>
+        <p>{{#if spotify_status}}
+                <b>OK</b>
+            {{else}}
+                <button onclick="window.location.href='{{spotify_auth_url}}'">Authorize</button>
+            {{/if}}
+        </p>
+    </div>
+</body>

@@ -28,6 +28,7 @@
     "@nestjs/typeorm": "^7.1.5",
     "dotenv": "^8.2.0",
     "express-session": "^1.17.1",
+    "hbs": "^4.1.1",
     "mfrc522-rpi": "^2.1.3",
     "mysql2": "^2.2.5",
     "onoff": "^6.0.2",

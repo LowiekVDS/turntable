@@ -36,3 +36,4 @@ lerna-debug.log*
 # Env and configs
 *.env
 ormconfig.json
+tokens_sonos.json
