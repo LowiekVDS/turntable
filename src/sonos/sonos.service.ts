@@ -52,7 +52,7 @@ export class SonosService {
         
         var rooms: string[] = [];
         result.data.forEach(zone => {
-            rooms.push(zone.coordinator.nconf.get('sonos:room'));
+            rooms.push(zone.coordinator.roomName);
         });
 
         return rooms;
