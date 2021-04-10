@@ -15,10 +15,6 @@
       }    
   },
   "options": {
-    "constants": {
-        "HOST": "http://localhost:3000",
-        "SONOS_API_HOST": "http://localhost:5005"
-    },
     "simulateRecord" : {
         "enabled": true,
         "data": "10;spotify:album:7acEciVtnuTzmwKptkjth5;"
