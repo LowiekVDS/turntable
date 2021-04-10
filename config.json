@@ -13,5 +13,11 @@
       "nfc": {
           "reset": 16
       }    
+  },
+  "options": {
+    "simulateRecord" : {
+        "enabled": true,
+        "data": "10;spotify:album:7acEciVtnuTzmwKptkjth5;"
+    }
   }
 }

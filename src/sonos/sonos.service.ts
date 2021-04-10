@@ -1,5 +1,5 @@
 import { HttpException, HttpService, Injectable } from '@nestjs/common';
-import { MediumInfo } from 'src/hardware/medium';
+import { Record } from 'src/hardware/hardwarecontrol';
 import { EventBus } from 'src/utils/eventbus';
 
 const qs = require('qs');
@@ -15,7 +15,7 @@ export class SonosService {
 
     constructor(private httpService: HttpService) {
         // Volume control callback
-        EventBus.addListener('volume', ((pos, dir) => {
+        EventBus.addListener('volumeEncoder', ((pos, dir) => {
             this.changeVolume(dir)
         }).bind(this))
 
@@ -29,8 +29,10 @@ export class SonosService {
         }).bind(this));
 
         // Play a new medium/song
-        EventBus.addListener('medium.new', ((mediumInfo: MediumInfo) => {
-            this.prepareSongFromPlaylist(mediumInfo.uri, mediumInfo.trackNumber)
+        EventBus.addListener('newRecord', ((record: Record) => {
+            if (record.loaded) {
+                this.prepareSongFromPlaylist(record.uri, record.selectedTrack)
+            }
         }).bind(this))
 
         // Emit event on status every second

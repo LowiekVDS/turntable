@@ -2,7 +2,6 @@ import { HttpService, Injectable } from "@nestjs/common";
 import { DIR_IN, DIR_LOW } from "rpi-gpio";
 import { SonosService } from "src/sonos/sonos.service";
 import { EventBus } from "src/utils/eventbus";
-import { MediumFactory } from "./medium";
 
 var nconf = require('nconf');
 var gpio = require('rpi-gpio')
@@ -26,7 +25,7 @@ export const HardwareControlFactory = (function () {
 class HardwareControl {
 
     public volumeEncoder = new VolumeEncoder();
-    public medium = MediumFactory.getInstance();
+    public recordManager = new RecordManager();
 
     constructor() {
         // Setup gpio pins
@@ -37,10 +36,7 @@ class HardwareControl {
         gpio.setup(nconf.get('pins:volumeEncoder:A'), DIR_IN);
         gpio.setup(nconf.get('pins:volumeEncoder:B'), DIR_IN);
 
-        // Encoder callback
-        EventBus.addListener('volumeEncoder', this.volumeEncoder.handleOnChange);
-
-        // Play pause thing callback for motor
+        // Play pause thing callback for motor 
         EventBus.addListener('playPausePin', ((value) => {
             if (value == 0) {
                 this.writeChannel('motor', false);
@@ -66,8 +62,9 @@ class HardwareControl {
                 break;
             case nconf.get('pins:volumeEncoder:A'):
             case nconf.get('pins:volumeEncoder:B'):
-                EventBus.emit('volumeEncoderHardware', await this.readChannel('volumeEncoder:A'), await this.readChannel('volumeEncoder:B'));
-                EventBus.emit('volume', this.volumeEncoder.position, this.volumeEncoder.dir);
+
+                this.volumeEncoder.handleOnChange(await this.readChannel('volumeEncoder:A'), await this.readChannel('volumeEncoder:B'));
+                EventBus.emit('volumeEncoder', this.volumeEncoder.position, this.volumeEncoder.dir);
                 break;
             case nconf.get('pins:optical'):
                 EventBus.emit('optical', value);
@@ -86,6 +83,104 @@ class HardwareControl {
     }
 }
 
+const Mfrc522 = require("mfrc522-rpi");
+const SoftSPI = require("rpi-softspi");
+
+export type Record = {
+    uri: string,
+    loaded: boolean,
+    nrOfTracks: number,
+    selectedTrack: number
+}
+
+export type Pulse = {
+    minPeriod: number, // in ms
+    maxPeriod: number
+}
+
+class RecordManager {
+
+    private softSPI = new SoftSPI({
+        clock: 23, // pin number of SCLK
+        mosi: 19, // pin number of MOSI
+        miso: 21, // pin number of MISO
+        client: 24 // pin number of CS
+    });
+
+    private mfrc522 = new Mfrc522(this.softSPI).setResetPin(nconf.get('pins:nfc:reset'))
+
+    private state = {
+        scanner: {
+            scanningTag: false,
+            scanningTrack: false,
+
+        },
+        record: {
+            uri: '',
+            loaded: false,
+            nrOfTracks: 0,
+            selectedTrack: 0
+        },
+    }
+
+    constructor() {
+
+        // Register all callbacks
+
+
+        // Start card reading procedure
+        this.state.scanner.scanningTag = false;
+        setInterval( (() => {
+            this.pollTag();
+        }).bind(this), 100);
+    }
+
+    async 
+
+    pollTag() {
+        if (!this.state.scanner.scanningTag) {
+            return;
+        }
+
+        var data = '';
+        if (!nconf.get('options:simulateRecord:enabled')) {
+
+            this.mfrc522.reset();
+
+            let response = this.mfrc522.findCard();
+            if (!response.status) {
+                return;
+            }
+
+            const uuid = response.data;
+    
+            /**
+             * Fetch data:
+             * Looks like this: 16;spotify:track:7KNdhg5DjPyvSeEawXYhlv; (40 bytes)
+             * 
+             * The chip contains 4 blocks in each sector. The first three are used to write data. Every block contains 16 bytes
+             * Our whole message fits in just 3 blocks!
+             * 
+             * This program uses blocks 8, 9 and 10
+             */
+            for (var i = 8; i <= 10; i++) {
+                var blockData = this.mfrc522.getDataForBlock(i);
+                data += new TextDecoder().decode(Uint8Array.from(blockData));
+            }
+        } else {
+            data = nconf.get('options:simulateRecord:data');
+        }
+        
+        // Split data
+        var splittedData = data.split(';');
+        
+        this.state.record.nrOfTracks = parseInt(splittedData[0]);
+        this.state.record.uri = splittedData[1];
+
+        this.mfrc522.stopCrypto();
+    }
+}
+
 class VolumeEncoder {
 
     public position = 0;
@@ -99,24 +194,21 @@ class VolumeEncoder {
         [2, 1, -1, 0]
     ];
 
-    constructor() {
-        EventBus.addListener('volumeEncoderHardware', ((A, B) => {
-            this.handleOnChange(this.getValue(A, B));
-        }).bind(this))
-    }
+    constructor() {}
 
     async getValue(A, B) {
         return 2 * A + B;
     }
     
-    async handleOnChange(value) { 
+    async handleOnChange(A, B) {
+        var value = this.getValue(A, B);
         if (this.curValue === null) {
-            this.curValue = value
+            this.curValue = value;
             return;
         }
 
         var prevValue = this.curValue;
-        this.curValue = value
+        this.curValue = value;
         var action = this.lookupMatrix[prevValue][this.curValue];
 
         if (action != 2) {
