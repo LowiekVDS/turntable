@@ -1,10 +1,12 @@
-import { Controller, Get, Render, Req, Res, Session } from '@nestjs/common';
+import { Controller, Get, HttpException, Query, Render, Req, Res, Session } from '@nestjs/common';
 import { AppService } from './app.service';
+import { SonosService } from './sonos/sonos.service';
+
+var nconf = require('nconf');
+
+nconf.use('file', { file: './config.json' });
 
 require('dotenv').config()
-const fs = require('fs')
-import {constants} from 'fs'
-import { SonosService } from './sonos/sonos.service';
 
 @Controller()
 export class AppController {
@@ -15,28 +17,29 @@ export class AppController {
     @Render('config')
     async dashboard(@Session() session) {
 
-        var data = {
-            sonos_status: false,
-            spotify_status: false,
-            sonos_auth_url: '/sonos/auth'
+        const rooms = await this.sonosService.getSonosRooms();
+
+        return {
+            rooms,
+            state: {
+                currentRoom: nconf.get('sonos:room') || 'None'
+            },
+            api: {
+                setRoom: '/api/setroom'
+            }
+        }
+    }
+
+    @Get('api/setroom')
+    async setroom(@Query('room') room: string, @Res() res) {
+        const rooms = await this.sonosService.getSonosRooms();
+        if (!rooms.includes(room)) {
+            throw new HttpException("Bad request", 400);
         }
 
-        try {
-            await fs.access('tokens_sonos.json', constants.R_OK | constants.W_OK, (err) => {});
-            data.sonos_status = true;
-            console.log('true');
-        } catch (e) {
-            console.log(e);
-            console.log('nope')
-         }
-        
-        return data;
-    }
+        nconf.set('sonos:room', room);
+        await nconf.save();
 
-    @Get('info')
-    async info() {
-        this.sonosService.playSongFromPlaylist('lounge', 'spotify:album:0qn1jsJoxn1TsgkDqP9pP9', 6)
-        return;
+        return res.redirect('/')
     }
-
 }

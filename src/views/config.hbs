@@ -6,18 +6,18 @@
     <h1>Turntable configuration page</h1>
     <div>
         <h2>Status</h2>
-        <p>Sonos: 
-            {{#if sonos_status}}
-                <b>OK</b>
-            {{else}}
-                <button onclick="window.location.href='{{sonos_auth_url}}'">Authorize</button>
-            {{/if}}
-        </p>
-        <p>{{#if spotify_status}}
-                <b>OK</b>
-            {{else}}
-                <button onclick="window.location.href='{{spotify_auth_url}}'">Authorize</button>
-            {{/if}}
-        </p>
+        <p>Current room: <b>{{state.currentRoom}}</b></p>
+
+        <h2>Configure</h2>
+        <h3>Room</h3>
+        <p>Choose a new room to play on</p>
+        <form action={{api.setRoom}}>
+            <select name="room">
+                {{#each rooms}}
+                    <option value="{{this}}">{{this}}</option>
+                {{/each}}
+            </select>
+            <input type="submit" value="Update">
+        </form>
     </div>
 </body>
