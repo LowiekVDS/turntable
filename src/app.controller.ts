@@ -15,7 +15,7 @@ export class AppController {
     
     @Get()
     @Render('config')
-    async dashboard(@Session() session) {
+    async dashboard() {
 
         const rooms = await this.sonosService.getSonosRooms();
 

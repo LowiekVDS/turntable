@@ -8,16 +8,11 @@ require('dotenv').config()
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
-    app.enableCors({
-        origin: ['http://localhost:3000'],
-        credentials: true,
-    });
-    app.use(session({ secret: process.env.SESSION_SECRET }));
 
     app.useStaticAssets(join(__dirname, '..', 'src/public'));
     app.setBaseViewsDir(join(__dirname, '..', 'src/views'));
     app.setViewEngine('hbs');
 
-  await app.listen(3000);
+  await app.listen(process.env.PORT);
 }
 bootstrap();
