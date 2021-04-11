@@ -1,23 +1,37 @@
 {
-  "sonos": {
-    "room": "Lounge"
-  },
-  "pins": {
-      "playPausePin": 7,    
-      "volumeEncoder": {
-          "A": 11,          
-          "B": 12           
-      },
-      "optical": 13,         
-      "motor": 15,
-      "nfc": {
-          "reset": 16
-      }    
-  },
-  "options": {
-    "simulateRecord" : {
-        "enabled": true,
-        "data": "spotify:album:7acEciVtnuTzmwKptkjth5;"
+    "sonos": {
+        "room": "Lounge"
+    },
+    "pins": {
+        "playPausePin": 7,    
+        "volumeEncoder": {
+            "A": 11,          
+            "B": 12           
+        },
+        "optical": 13,         
+        "motor": 15,
+        "nfc": {
+            "reset": 16
+        }    
+    },
+    "options": {
+        "simulateRecordData" : {
+            "enabled": true,
+            "data": "spotify:album:7acEciVtnuTzmwKptkjth5;"
+        },
+        "simulateRecordTrack" : {
+            "enabled": false,
+            "data": 4
+        }
+    },
+    "pulses": {
+        "short": {
+            "minPeriod": 100,
+            "maxPeriod": 1000
+        },
+        "long": {
+            "minPeriod": 1500,
+            "maxPeriod": 3000
+        }
     }
-  }
 }

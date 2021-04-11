@@ -19,33 +19,37 @@ export class SonosService {
             this.changeVolume(dir)
         }).bind(this))
 
-        // Play pause thing callback
+        // Play pause thing callback. Playing is done by event 'newRecord'
         EventBus.addListener('playPausePin', ((value) => {
             if (value == 0) {
                 this.pause()
-            } else if (value == 1) {
-                this.play()
             }
         }).bind(this));
 
-        // Play a new medium/song
+        // Play the song when a new record has been found
         EventBus.addListener('newRecord', ((record: Record) => {
             if (record.loaded) {
-                this.prepareSongFromPlaylist(record.uri, record.selectedTrack)
+                this.playSongFromPlaylist(record.uri, record.selectedTrack)
             }
         }).bind(this))
 
         // Emit event on status every second
-        setInterval(( async () => {
-            const state = await this.getState();
-            EventBus.emit('sonos.state', state);
-        }).bind(this), 1000);
+        // setInterval(( async () => {
+        //     const state = await this.getState();
+        //     EventBus.emit('sonos.state', state);
+        // }).bind(this), 1000);
     }
 
+    /**
+     * Get the state of the selected Sonos speakers
+     */
     async getState(): Promise<any> {
         return (await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/state`).toPromise()).data;
     }
 
+    /**
+     * Get all available sonos rooms
+     */
     async getSonosRooms(): Promise<string[]> {
 
         const result = await this.httpService.get(`${process.env.SONOS_API_HOST}/zones`).toPromise();
@@ -75,12 +79,12 @@ export class SonosService {
     }
 
     async playSongFromPlaylist(uri: string, index: number) {
-        await this.prepareSongFromPlaylist(uri, index);
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/play`).toPromise();
+        await this.playSpotifyUri(uri);
+        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/trackseek/${index}`).toPromise();
     }
 
     async prepareSongFromPlaylist(uri: string, index: number) {
-        await this.prepareSpotifyUri(uri);
+        await this.playSpotifyUri(uri);
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/trackseek/${index}`).toPromise();
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/pause`).toPromise();
     }

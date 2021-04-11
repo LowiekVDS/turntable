@@ -13,6 +13,7 @@ export class AppController {
     constructor(private readonly appService: AppService,
                 private sonosService: SonosService) { }
     
+    // Get configuration/status dashboard. Renders views/config.hbs
     @Get()
     @Render('config')
     async dashboard() {
@@ -30,6 +31,7 @@ export class AppController {
         }
     }
 
+    // Saves the Sonos room
     @Get('api/setroom')
     async setroom(@Query('room') room: string, @Res() res) {
         const rooms = await this.sonosService.getSonosRooms();

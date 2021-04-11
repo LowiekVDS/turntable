@@ -5,6 +5,8 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 
 require('dotenv').config()
+require('node-color-log').setLevel(process.env.LOG_LEVEL || 'error');
+require('node-color-log').setLevelColor();
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);

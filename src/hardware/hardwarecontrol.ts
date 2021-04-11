@@ -5,8 +5,14 @@ var nconf = require('nconf');
 var gpio = require('rpi-gpio')
 var gpiop = gpio.promise;
 
+const logger = require('node-color-log');
+
 nconf.use('file', { file: './config.json' });
 
+/**
+ * This converts the HardwareControl class into a singleton.
+ * So only one instance can exist.
+ */
 export const HardwareControlFactory = (function () {
     var instance;
     return {
@@ -22,59 +28,69 @@ export const HardwareControlFactory = (function () {
 
 class HardwareControl {
 
+    // 'Subclasses' for hardware
     public volumeEncoder = new VolumeEncoder();
     public recordManager = new RecordManager();
 
     constructor() {
         // Setup gpio pins
-        gpio.setup(nconf.get('pins:motor'), gpio.DIR_OUT);
-        gpio.setup(nconf.get('pins:playPausePin'), gpio.DIR_IN);
-        gpio.setup(nconf.get('pins:optical'), gpio.DIR_IN);
+        gpio.setup(nconf.get('pins:motor'), gpio.DIR_OUT, gpio.EDGE_BOTH, this.defaultGpioCallback);
+        gpio.setup(nconf.get('pins:playPausePin'), gpio.DIR_IN, gpio.EDGE_BOTH, this.defaultGpioCallback);
+        gpio.setup(nconf.get('pins:optical'), gpio.DIR_IN, gpio.EDGE_BOTH, ((err, value) => {
+            this.defaultGpioCallback(err, value);
 
-        gpio.setup(nconf.get('pins:volumeEncoder:A'), gpio.DIR_IN);
-        gpio.setup(nconf.get('pins:volumeEncoder:B'), gpio.DIR_IN);
+            // Set the initial track scanner state
+            this.readChannel('optical', (err, value) => {
+                this.defaultGpioCallback(err, value);
+                this.recordManager.state.scanner.pulses.prevState = value;
+            })
+        }).bind(this));
+        gpio.setup(nconf.get('pins:volumeEncoder:A'), gpio.DIR_IN, gpio.EDGE_BOTH, this.defaultGpioCallback);
+        gpio.setup(nconf.get('pins:volumeEncoder:B'), gpio.DIR_IN, gpio.EDGE_BOTH, this.defaultGpioCallback);
 
-        this.readChannel('optical').then((value) => {
-            this.recordManager.state.scanner.pulses.prevState = value;
-        })
-
-        //Play pause thing callback for motor 
-        // EventBus.addListener('playPausePin', ((value) => {
-        //     if (value == 0) {
-        //         this.writeChannel('motor', false);
-        //     } else if (value == 1) {
-        //         this.writeChannel('motor', true);
-        //     }
-        // }).bind(this));
-        
         //Play pause callback for reading disc procedure
-        EventBus.addListener('playPausePin', ((value) => {
+        EventBus.addListener('playPausePin', (async (value) => {
+
+            // When 'playing', start scanning procedures. 
             if (value == 1) {
-                // We need to start playing!
+                // Start to scan the record (both tag and track)
                 this.recordManager.startScanningTag();
                 this.recordManager.startScanningTrack();
 
-                while (!this.recordManager.state.record.loaded.tag && !this.recordManager.state.record.loaded.track) { }
-                
-                EventBus.emit('newRecord', this.recordManager.state.record);
+                this.writeChannel('motor', true);
+
+                this.recordManager.state.scanner.controllerState = 'RUNNING';
+                logger.info('Started scanning record (both tag and track)');
+
+                // Wait for it to complete (or to be aborted)
+                var recordInterval = setInterval((() => {
+                    // When both track and tag are loaded, go ahead and send newRecord event
+                    if (this.recordManager.state.record.loaded.tag && this.recordManager.state.record.loaded.track) {
+                        clearInterval(recordInterval);
+                        EventBus.emit('newRecord', this.recordManager.state.record);
+                    } else if (this.recordManager.state.scanner.controllerState == 'ABORTED') {
+                        clearInterval(recordInterval);
+                        logger.warning('Record scanning was aborted')
+                    }
+                }).bind(this), 500)
+            } else {
+                this.writeChannel('motor', false);
+                this.recordManager.state.scanner.controllerState = 'ABORTED';
             }
         }).bind(this))
 
-
-        // React on sonos playback state
-        // EventBus.addListener('sonos.state', ((state) => {
-        //     if (state.playbackState == 'PLAYING') {
-        //         this.writeChannel('motor', true);
-        //     } else {
-        //         this.writeChannel('motor', false);
-        //     }
-        // }).bind(this));
-    
-        // Register event
+        // Register event handler
         gpio.on('change', this.handleOnChange)
+        logger.info('HardwareControl ready')
+    }
+
+    defaultGpioCallback(err, value) {
+        if (err) throw err;
     }
 
     async handleOnChange(channel, value) {
+
+        logger.debug(`Got value on channel '${channel}' with value '${value}'`);
         
         var callbackCategory = '';
         switch (channel) {
@@ -83,24 +99,43 @@ class HardwareControl {
                 break;
             case nconf.get('pins:volumeEncoder:A'):
             case nconf.get('pins:volumeEncoder:B'):
+                
+                // Some magic to read pin values.
+                var A = null;
+                var B = null;
+                this.readChannel('volumeEncoder:A', (err, value) => {
+                    this.defaultGpioCallback(err, value);
+                    A = value;
+                });
+                this.readChannel('volumeEncoder:B', (err, value) => {
+                    this.defaultGpioCallback(err, value);
+                    B = value;
+                });
+                
+                var encoderInterval = setInterval(() => {
+                    if (A != null && B != null) {
+                        clearInterval(encoderInterval);
+                        this.volumeEncoder.handleOnChange(A, B);
+                    }
+                }, 10);
 
-                this.volumeEncoder.handleOnChange(await this.readChannel('volumeEncoder:A'), await this.readChannel('volumeEncoder:B'));
+                // Send event with updated encoder
                 EventBus.emit('volumeEncoder', this.volumeEncoder.position, this.volumeEncoder.dir);
                 break;
             case nconf.get('pins:optical'):
-                EventBus.emit('optical', value);
+                this.recordManager.handleOpticalChange(value);
                 break;
             default:
                 return;
         }
     }
 
-    readChannel(channel: string): Promise<any> {
-        return gpiop.read(nconf.get(`pins:${channel}`));
+    readChannel(channel: string, callback: Function) {
+        return gpiop.read(nconf.get(`pins:${channel}`), callback);
     }
 
     writeChannel(channel:string, value:boolean) {
-        return gpiop.write(nconf.get(`pins:${channel}`), value);
+        return gpio.write(nconf.get(`pins:${channel}`), value);
     }
 }
 
@@ -114,11 +149,10 @@ export type Record = {
     selectedTrack: number
 }
 
-export type Pulse = {
-    minPeriod: number, // in ms
-    maxPeriod: number
-}
 
+/**
+ * This class is responsible for managing the record (so scanning the tag AND the track)
+ */
 class RecordManager {
 
     private softSPI = new SoftSPI({
@@ -134,18 +168,19 @@ class RecordManager {
         scanner: {
             scanningTag: false,
             scanningTrack: false,
+            controllerState: 'RUNNING',
             pulses: {
                 prevTimeStamp: 0,
                 measuring: false,
                 prevState: -1,
                 longPulse: {
-                    minPeriod: 50,
-                    maxPeriod: 110,
+                    minPeriod: nconf.get('pulses:long:minPeriod'),
+                    maxPeriod: nconf.get('pulses:long:maxPeriod'),
                     amount: 0
                 },
                 shortPulse: {
-                    minPeriod: 50,
-                    maxPeriod: 110,
+                    minPeriod: nconf.get('pulses:short:minPeriod'),
+                    maxPeriod: nconf.get('pulses:short:maxPeriod'),
                     amount: 0
                 }
             }
@@ -161,16 +196,6 @@ class RecordManager {
         },
     }
 
-    private shortPulse: Pulse = {
-        minPeriod: 50,
-        maxPeriod: 110
-    }
-
-    private longPulse: Pulse = {
-        minPeriod: 200,
-        maxPeriod: 300
-    }
-
     constructor() {
 
         // Register handlers
@@ -183,65 +208,84 @@ class RecordManager {
     }
 
     handleOpticalChange(value) {
-        if (!this.state.scanner.scanningTrack) {
+        if (!this.state.scanner.scanningTrack) { // If not scanning the track, just ignore it
             return;
         }
 
-        var flank; // Determine signal flank: 'RISING' or 'FALLING'
+        // Simulation?
+        if (nconf.get('options:simulateRecordTrack:enabled')) {
+
+            this.state.record.selectedTrack = nconf.get('options:simulateRecordTrack:data');
+            this.state.record.loaded.track = true;
+            logger.info(`Simulated selected track scanning. Selected track: ${this.state.record.selectedTrack}`);
+            this.stopScanningTrack()
+            return;
+        }
+
+        // Determine signal flank: 'RISING' or 'FALLING'
+        var flank; 
         if (this.state.scanner.pulses.prevState < value) { 
             flank = 'RISING';
         } else if (this.state.scanner.pulses.prevState > value) {
             flank = 'FALLING';
-        } else { //No flank found, just update value (for initialization) and exit
+        } else {
             this.state.scanner.pulses.prevState = value;
             return;
         }
 
+        // A rising flank means that the sensor is at the beginning of a 'gap' (also called a 'pulse')
+        // A falling flank means that the sensor is at the end of pulse
         if (flank == 'RISING') {
 
             if (this.state.scanner.pulses.measuring) {
-                // Already measuring, do not measure again, do not set prevState
-                // Probably a false positive
-                return;
-            }
-
-            // Start measurement of gap
-            this.state.scanner.pulses.prevTimeStamp = Date.now();
-            this.state.scanner.pulses.longPulse.amount = 0;
-            this.state.scanner.pulses.shortPulse.amount = 0;
-            this.state.scanner.pulses.measuring = true;
-        } else if (flank == 'FALLING') {
-
-            if (!this.state.scanner.pulses.measuring) {
-                // Probably started in the middle of a pulse. Ignore this one, but set the prevState
+                // Already measuring a pulse, just set value and move on. Probably a false positive.
                 this.state.scanner.pulses.prevState = value;
                 return;
             }
 
-            // Stop measurement of gap
+            // Start measurement of a gap
+            this.state.scanner.pulses.prevTimeStamp = Date.now();
+            this.state.scanner.pulses.measuring = true;
+        } else if (flank == 'FALLING') {
+
+            if (!this.state.scanner.pulses.measuring) {
+                // Measurement did not start yet. Probably started in the middle of a pulse. Ignore this one, but set the prevState
+                this.state.scanner.pulses.prevState = value;
+                return;
+            }
+
+            // Measure length of gap
             var endTime = Date.now();
-            // Determine if short, long or no pulse
             var difference = endTime - this.state.scanner.pulses.prevTimeStamp;
 
             if (difference > this.state.scanner.pulses.longPulse.maxPeriod + this.state.scanner.pulses.shortPulse.minPeriod) {
-                // Pulse is way too big. Stop measuring
+                // Pulse is way too big. Something went wrong, stop measurement and throw result away.
+                logger.debug('Found super long pulse')
                 this.state.scanner.pulses.measuring = false;
-            } else if (difference >= this.state.scanner.pulses.shortPulse.minPeriod &&
-                difference <= this.state.scanner.pulses.shortPulse.maxPeriod) {
-                // Short pulse found!
-                this.state.scanner.pulses.shortPulse.amount += 1;
-            } else if (difference >= this.state.scanner.pulses.shortPulse.minPeriod &&
-                difference <= this.state.scanner.pulses.shortPulse.maxPeriod) {
-                // Long pulse found! "Pulse Closure": we can determine track number!
-                // Determine track number...
-                this.state.record.selectedTrack = this.state.record.nrOfTracks
-                this.state.record.loaded.track = true;
-                
-                this.stopScanningTrack();
 
+            } else if (difference >= this.state.scanner.pulses.shortPulse.minPeriod &&
+                    difference <= this.state.scanner.pulses.shortPulse.maxPeriod) {
+                
+                // Short pulse found!
+                logger.debug('Found short pulse')
+                this.state.scanner.pulses.shortPulse.amount += 1;
                 this.state.scanner.pulses.measuring = false;
+
+            } else if (difference >= this.state.scanner.pulses.shortPulse.minPeriod &&
+                    difference <= this.state.scanner.pulses.shortPulse.maxPeriod) {
+                
+                // Long pulse found! We can determine track number!
+                logger.debug('Found long pulse')
+                this.state.record.selectedTrack = this.state.scanner.pulses.shortPulse.amount;
+                this.state.scanner.pulses.measuring = false;
+
+                // Track number is loaded
+                this.state.record.loaded.track = true;
+                logger.info(`Found selected track: ${this.state.record.selectedTrack}`);
+                this.stopScanningTrack();
             } else {
-                // Probably a false positive, keep going...
+                // Probably a false positive, just keep going and ignore new state...
+                logger.debug('Found super short pulse')
                 return;
             }
         }
@@ -252,27 +296,39 @@ class RecordManager {
 
     stopScanningTrack() {
         this.state.scanner.scanningTrack = false;
+
+        logger.info('Stopped measuring selected track')
     }
     startScanningTrack() {
+        this.state.scanner.pulses.longPulse.amount = 0;
+        this.state.scanner.pulses.shortPulse.amount = 0;
         this.state.record.loaded.track = false;
         this.state.scanner.scanningTrack = true;
+
+        logger.info('Started measuring selected track')
     }
 
     stopScanningTag() {
         this.state.scanner.scanningTag = false;
+        logger.info('Stopped measuring record tag')
     }
     startScanningTag() {
         this.state.record.loaded.tag = false;
         this.state.scanner.scanningTag = true;
+
+        logger.info('Started measuring record tag')
     }
 
+    /**
+     *  This function reads the tag and updates the record. Only runs when scanning procedure is enabled.
+     */
     pollTag() {
-        if (!this.state.scanner.scanningTag) {
+        if (!this.state.scanner.scanningTag) { // Scanning procedure not enabled...
             return;
         }
 
         var data = '';
-        if (!nconf.get('options:simulateRecord:enabled')) {
+        if (!nconf.get('options:simulateRecordData:enabled')) { // Use hardware
 
             this.mfrc522.reset();
 
@@ -296,20 +352,21 @@ class RecordManager {
                 var blockData = this.mfrc522.getDataForBlock(i);
                 data += new TextDecoder().decode(Uint8Array.from(blockData));
             }
-        } else {
-            data = nconf.get('options:simulateRecord:data');
+
+            this.mfrc522.stopCrypto();
+        } else { // Simulate (mocking the chip)
+            data = nconf.get('options:simulateRecordData:data');
         }
         
-        // Split data
         var splittedData = data.split(';');
-        
-        //this.state.record.nrOfTracks = parseInt(splittedData[0]);
+
+        // Update record and disable itself
         this.state.record.uri = splittedData[0];
         this.state.record.loaded.tag = true;
 
-        this.stopScanningTag();
+        logger.info(`Found a new record tag with uri: ${this.state.record.uri}`);
 
-        this.mfrc522.stopCrypto();
+        this.stopScanningTag();
     }
 }
 
@@ -317,7 +374,7 @@ class VolumeEncoder {
 
     public position = 0;
     public dir = 0;
-    
+
     private curValue = null;
     private lookupMatrix = [
         [0, -1, 1, 2],
@@ -332,6 +389,9 @@ class VolumeEncoder {
         return 2 * A + B;
     }
     
+    /**
+     * Handles a change in encoder pins, resulting in position/dir changes.
+     */
     async handleOnChange(A, B) {
         var value = this.getValue(A, B);
         if (this.curValue === null) {
@@ -343,7 +403,7 @@ class VolumeEncoder {
         this.curValue = value;
         var action = this.lookupMatrix[prevValue][this.curValue];
         
-        console.log(action);
+        logger.debug(`Encoder received new action: ${action}`);
 
         if (action != 2) {
             this.dir = action;
