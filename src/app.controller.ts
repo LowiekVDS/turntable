@@ -1,5 +1,6 @@
 import { Controller, Get, HttpException, Query, Render, Req, Res, Session } from '@nestjs/common';
 import { AppService } from './app.service';
+import { HardwareService } from './hardware/hardware.service';
 import { SonosService } from './sonos/sonos.service';
 
 var nconf = require('nconf');
@@ -11,7 +12,8 @@ require('dotenv').config()
 @Controller()
 export class AppController {
     constructor(private readonly appService: AppService,
-                private sonosService: SonosService) { }
+                private sonosService: SonosService,
+                private hardwareService: HardwareService) { }
     
     // Get configuration/status dashboard. Renders views/config.hbs
     @Get()
@@ -27,7 +29,8 @@ export class AppController {
             },
             api: {
                 setRoom: '/api/setroom'
-            }
+            },
+            record: this.hardwareService.getRecord()
         }
     }
 

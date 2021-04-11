@@ -7,7 +7,12 @@
     <div>
         <h2>Status</h2>
         <p>Current room: <b>{{state.currentRoom}}</b></p>
-
+        <p>Current record:</p>
+        <ul>
+            <li><b>Source: </b>{{record.uri}}</li>
+            <li><b>Number of tracks: </b>{{record.nrOfTracks}}</li>
+            <li><b>Selected track: </b>{{record.selectedTrack}}</li>
+        </ul>
         <h2>Configure</h2>
         <h3>Room</h3>
         <p>Choose a new room to play on</p>

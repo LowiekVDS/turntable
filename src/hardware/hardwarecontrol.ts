@@ -39,10 +39,10 @@ class HardwareControl {
             this.defaultGpioCallback(err, value);
 
             // Set the initial play thing
-            this.readChannel('playPausePin', (err, value) => {
+            this.readChannel('playPausePin', ((err, value) => {
                 this.defaultGpioCallback(err, value);
                 this.handleOnChange(nconf.get('pins:playPausePin'), value);
-            })
+            }).bind(this));
             
         }).bind(this));
         gpio.setup(nconf.get('pins:optical'), gpio.DIR_IN, gpio.EDGE_BOTH, ((err, value) => {
@@ -109,7 +109,7 @@ class HardwareControl {
                 EventBus.emit('playPausePin', value);
                 break;
             case nconf.get('pins:volumeEncoder:A'):
-                this.volumeEncoder.handleOnChange(null, value);
+                this.volumeEncoder.handleOnChange(value, null);
                 EventBus.emit('volumeEncoder', this.volumeEncoder.position, this.volumeEncoder.dir);
                 break;
             
@@ -127,7 +127,7 @@ class HardwareControl {
     }
 
     readChannel(channel: string, callback: Function) {
-        return gpiop.read(nconf.get(`pins:${channel}`), callback);
+        return gpio.read(nconf.get(`pins:${channel}`), callback);
     }
 
     writeChannel(channel:string, value:boolean) {
@@ -140,7 +140,10 @@ const SoftSPI = require("rpi-softspi");
 
 export type Record = {
     uri: string,
-    loaded: boolean,
+    loaded: {
+        track: boolean,
+        tag: boolean
+    },
     nrOfTracks: number,
     selectedTrack: number
 }
@@ -292,6 +295,10 @@ class RecordManager {
         return;
     }
 
+    getRecord(): Record {
+        return this.state.record;
+    }
+
     stopScanningTrack() {
         this.state.scanner.scanningTrack = false;
 
@@ -373,8 +380,8 @@ class VolumeEncoder {
     public position = 0;
     public dir = 0;
 
-    private A;
-    private B;
+    private A = 0;
+    private B = 0;
 
     private curValue = null;
     private lookupMatrix = [
@@ -395,8 +402,8 @@ class VolumeEncoder {
      */
     async handleOnChange(A = null, B = null) {
         
-        this.A = A === null ? this.A : A;
-        this.B = B === null ? this.B : B;
+        this.A = A === null ? this.A : (A ? 1 : 0);
+        this.B = B === null ? this.B : (B ? 1 : 0);
 
         var value = this.getValue(A, B);
         if (this.curValue === null) {
@@ -404,7 +411,7 @@ class VolumeEncoder {
             return;
         }
 
-        var prevValue = this.curValue;
+        var prevValue = parseInt(this.curValue); // to make a copy
         this.curValue = value;
         var action = this.lookupMatrix[prevValue][this.curValue];
         

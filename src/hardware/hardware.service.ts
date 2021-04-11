@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { HardwareControlFactory } from "./hardwarecontrol";
+import { HardwareControlFactory, Record } from "./hardwarecontrol";
 
 @Injectable()
 export class HardwareService {
@@ -8,5 +8,8 @@ export class HardwareService {
 
     constructor() { }
     
+    getRecord(): Record {
+        return this.hardwareControlInstance.getRecord();
+    }
 
 }

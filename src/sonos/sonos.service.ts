@@ -70,9 +70,9 @@ export class SonosService {
 
     async changeVolume(relativeValue: number) {
         if (relativeValue > 0) {
-            this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/volume/+1`)
+            await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/volume/+1`).toPromise();
         } else if (relativeValue < 0) {
-            this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/volume/-1`)
+            await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/volume/-1`).toPromise();
         }
     }
 
