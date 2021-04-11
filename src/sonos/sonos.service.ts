@@ -93,9 +93,10 @@ export class SonosService {
 
     async playSpotifyUri(uri: string) {
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/clearqueue`).toPromise();
+        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/spotify/now/${uri}`).toPromise();
+        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/shuffle/off`).toPromise();
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/shuffle/off`).toPromise();
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/repeat/off`).toPromise();
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/crossfade/off`).toPromise();
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/spotify/now/${uri}`).toPromise();
     }
 }

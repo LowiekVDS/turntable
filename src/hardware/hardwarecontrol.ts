@@ -85,6 +85,8 @@ class HardwareControl {
             } else {
                 this.writeChannel('motor', false);
                 this.recordManager.state.scanner.controllerState = 'ABORTED';
+                this.recordManager.stopScanningTag();
+                this.recordManager.stopScanningTrack();
             }
         }).bind(this))
 
@@ -93,6 +95,10 @@ class HardwareControl {
             this.handleOnChange(channel, value);
         }).bind(this));
         logger.info('HardwareControl ready')
+    }
+
+    getRecord(): Record {
+        return this.recordManager.getRecord();
     }
 
     defaultGpioCallback(err, value) {
