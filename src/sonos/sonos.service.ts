@@ -21,16 +21,14 @@ export class SonosService {
 
         // Play pause thing callback. Playing is done by event 'newRecord'
         EventBus.addListener('playPausePin', ((value) => {
-            if (value == 0) {
+            if (value == false) {
                 this.pause()
             }
         }).bind(this));
 
         // Play the song when a new record has been found
         EventBus.addListener('newRecord', ((record: Record) => {
-            if (record.loaded) {
-                this.playSongFromPlaylist(record.uri, record.selectedTrack)
-            }
+            this.playSongFromPlaylist(record.uri, record.selectedTrack)
         }).bind(this))
 
         // Emit event on status every second
@@ -67,7 +65,7 @@ export class SonosService {
     }
 
     async pause() {
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/play`).toPromise();
+        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/pause`).toPromise();
     }
 
     async changeVolume(relativeValue: number) {
@@ -79,19 +77,18 @@ export class SonosService {
     }
 
     async playSongFromPlaylist(uri: string, index: number) {
-        await this.playSpotifyUri(uri);
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/trackseek/${index}`).toPromise();
+        await this.prepareSongFromPlaylist(uri, index);
+        await this.play();
     }
 
     async prepareSongFromPlaylist(uri: string, index: number) {
-        await this.playSpotifyUri(uri);
+        await this.prepareSpotifyUri(uri);
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/trackseek/${index}`).toPromise();
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/pause`).toPromise();
     }
 
     async prepareSpotifyUri(uri: string) {
         await this.playSpotifyUri(uri);
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/pause`).toPromise();
+        await this.pause();
     }
 
     async playSpotifyUri(uri: string) {

@@ -35,7 +35,16 @@ class HardwareControl {
     constructor() {
         // Setup gpio pins
         gpio.setup(nconf.get('pins:motor'), gpio.DIR_OUT, gpio.EDGE_BOTH, this.defaultGpioCallback);
-        gpio.setup(nconf.get('pins:playPausePin'), gpio.DIR_IN, gpio.EDGE_BOTH, this.defaultGpioCallback);
+        gpio.setup(nconf.get('pins:playPausePin'), gpio.DIR_IN, gpio.EDGE_BOTH, ((err, value) => {
+            this.defaultGpioCallback(err, value);
+
+            // Set the initial play thing
+            this.readChannel('playPausePin', (err, value) => {
+                this.defaultGpioCallback(err, value);
+                this.handleOnChange(nconf.get('pins:playPausePin'), value);
+            })
+            
+        }).bind(this));
         gpio.setup(nconf.get('pins:optical'), gpio.DIR_IN, gpio.EDGE_BOTH, ((err, value) => {
             this.defaultGpioCallback(err, value);
 
@@ -70,7 +79,7 @@ class HardwareControl {
                         EventBus.emit('newRecord', this.recordManager.state.record);
                     } else if (this.recordManager.state.scanner.controllerState == 'ABORTED') {
                         clearInterval(recordInterval);
-                        logger.warning('Record scanning was aborted')
+                        logger.warn('Record scanning was aborted')
                     }
                 }).bind(this), 500)
             } else {
@@ -80,7 +89,9 @@ class HardwareControl {
         }).bind(this))
 
         // Register event handler
-        gpio.on('change', this.handleOnChange)
+        gpio.on('change', ((channel, value) => {
+            this.handleOnChange(channel, value);
+        }).bind(this));
         logger.info('HardwareControl ready')
     }
 
@@ -98,28 +109,13 @@ class HardwareControl {
                 EventBus.emit('playPausePin', value);
                 break;
             case nconf.get('pins:volumeEncoder:A'):
+                this.volumeEncoder.handleOnChange(null, value);
+                EventBus.emit('volumeEncoder', this.volumeEncoder.position, this.volumeEncoder.dir);
+                break;
+            
             case nconf.get('pins:volumeEncoder:B'):
                 
-                // Some magic to read pin values.
-                var A = null;
-                var B = null;
-                this.readChannel('volumeEncoder:A', (err, value) => {
-                    this.defaultGpioCallback(err, value);
-                    A = value;
-                });
-                this.readChannel('volumeEncoder:B', (err, value) => {
-                    this.defaultGpioCallback(err, value);
-                    B = value;
-                });
-                
-                var encoderInterval = setInterval(() => {
-                    if (A != null && B != null) {
-                        clearInterval(encoderInterval);
-                        this.volumeEncoder.handleOnChange(A, B);
-                    }
-                }, 10);
-
-                // Send event with updated encoder
+                this.volumeEncoder.handleOnChange(null, value);
                 EventBus.emit('volumeEncoder', this.volumeEncoder.position, this.volumeEncoder.dir);
                 break;
             case nconf.get('pins:optical'):
@@ -199,7 +195,9 @@ class RecordManager {
     constructor() {
 
         // Register handlers
-        EventBus.addListener('optical', this.handleOpticalChange);
+        EventBus.addListener('optical', ((value) => {
+            this.handleOpticalChange(value);
+        }).bind(this));
 
         // Start card reading procedure
         setInterval( (() => {
@@ -271,8 +269,8 @@ class RecordManager {
                 this.state.scanner.pulses.shortPulse.amount += 1;
                 this.state.scanner.pulses.measuring = false;
 
-            } else if (difference >= this.state.scanner.pulses.shortPulse.minPeriod &&
-                    difference <= this.state.scanner.pulses.shortPulse.maxPeriod) {
+            } else if (difference >= this.state.scanner.pulses.longPulse.minPeriod &&
+                    difference <= this.state.scanner.pulses.longPulse.maxPeriod) {
                 
                 // Long pulse found! We can determine track number!
                 logger.debug('Found long pulse')
@@ -375,6 +373,9 @@ class VolumeEncoder {
     public position = 0;
     public dir = 0;
 
+    private A;
+    private B;
+
     private curValue = null;
     private lookupMatrix = [
         [0, -1, 1, 2],
@@ -392,7 +393,11 @@ class VolumeEncoder {
     /**
      * Handles a change in encoder pins, resulting in position/dir changes.
      */
-    async handleOnChange(A, B) {
+    async handleOnChange(A = null, B = null) {
+        
+        this.A = A === null ? this.A : A;
+        this.B = B === null ? this.B : B;
+
         var value = this.getValue(A, B);
         if (this.curValue === null) {
             this.curValue = value;
