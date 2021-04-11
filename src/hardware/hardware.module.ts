@@ -4,6 +4,7 @@ import { HardwareService } from './hardware.service';
 
 @Module({
     imports: [SonosModule],
-    providers: [HardwareService]
+    providers: [HardwareService],
+    exports: [HardwareModule, HardwareService]
 })
 export class HardwareModule {}
