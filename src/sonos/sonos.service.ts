@@ -78,25 +78,35 @@ export class SonosService {
 
     async playSongFromPlaylist(uri: string, index: number) {
         await this.prepareSongFromPlaylist(uri, index);
+        this.sleep(70);
         await this.play();
     }
 
     async prepareSongFromPlaylist(uri: string, index: number) {
         await this.prepareSpotifyUri(uri);
+        this.sleep(70);
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/trackseek/${index}`).toPromise();
     }
 
     async prepareSpotifyUri(uri: string) {
         await this.playSpotifyUri(uri);
+        this.sleep(70);
         await this.pause();
     }
 
     async playSpotifyUri(uri: string) {
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/clearqueue`).toPromise();
+        this.sleep(70);
+        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/shuffle/off`).toPromise();
+        this.sleep(70);
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/spotify/now/${uri}`).toPromise();
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/shuffle/off`).toPromise();
-        await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/shuffle/off`).toPromise();
+        this.sleep(70);
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/repeat/off`).toPromise();
+        this.sleep(70);
         await this.httpService.get(`${process.env.SONOS_API_HOST}/${nconf.get('sonos:room')}/crossfade/off`).toPromise();
+    }
+
+    async sleep(time) {
+        return new Promise(resolve => setTimeout(resolve, time));
     }
 }
