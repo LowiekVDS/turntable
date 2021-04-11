@@ -1,6 +1,4 @@
-import { HttpService, Injectable } from "@nestjs/common";
 import { DIR_IN, DIR_LOW } from "rpi-gpio";
-import { SonosService } from "src/sonos/sonos.service";
 import { EventBus } from "src/utils/eventbus";
 
 var nconf = require('nconf');
@@ -29,12 +27,12 @@ class HardwareControl {
 
     constructor() {
         // Setup gpio pins
-        gpio.setup(nconf.get('pins:motor'), DIR_LOW);
-        gpio.setup(nconf.get('pins:playPausePin'), DIR_IN);
-        gpio.setup(nconf.get('pins:optical'), DIR_IN);
+        gpio.setup(nconf.get('pins:motor'), gpio.DIR_OUT);
+        gpio.setup(nconf.get('pins:playPausePin'), gpio.DIR_IN);
+        gpio.setup(nconf.get('pins:optical'), gpio.DIR_IN);
 
-        gpio.setup(nconf.get('pins:volumeEncoder:A'), DIR_IN);
-        gpio.setup(nconf.get('pins:volumeEncoder:B'), DIR_IN);
+        gpio.setup(nconf.get('pins:volumeEncoder:A'), gpio.DIR_IN);
+        gpio.setup(nconf.get('pins:volumeEncoder:B'), gpio.DIR_IN);
 
         this.readChannel('optical').then((value) => {
             this.recordManager.state.scanner.pulses.prevState = value;
