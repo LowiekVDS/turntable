@@ -393,14 +393,14 @@ class VolumeEncoder {
 
     constructor() {}
 
-    async getValue(A, B) {
+    getValue(A, B) {
         return 2 * A + B;
     }
     
     /**
      * Handles a change in encoder pins, resulting in position/dir changes.
      */
-    async handleOnChange(A = null, B = null) {
+    handleOnChange(A = null, B = null) {
         
         this.A = A === null ? this.A : (A ? 1 : 0);
         this.B = B === null ? this.B : (B ? 1 : 0);
