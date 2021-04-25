@@ -12,6 +12,13 @@ To run the software, run the following command:
 sudo node dist/main
 ``` 
 
+You will also need to make a .env file (it does not come with this repository):
+```
+HOST=http://localhost:3000
+PORT=3000
+SONOS_API_HOST=http://localhost:5005
+LOG_LEVEL=debug
+```
 
 ### Sonos API server
 Clone the repository [jishi/node-sonos-http-api: An HTTP API bridge for Sonos easing automation. Hostable on any node.js capable device, like a raspberry pi or similar. (github.com)](https://github.com/jishi/node-sonos-http-api)
