@@ -10,13 +10,10 @@
         },
         "optical": 13,         
         "motor": 15,
-        "nfc": {
-            "reset": 16
-        }    
     },
     "options": {
         "simulateRecordData" : {
-            "enabled": true,
+            "enabled": false,
             "data": "spotify:album:7acEciVtnuTzmwKptkjth5"
         },
         "simulateRecordTrack" : {
