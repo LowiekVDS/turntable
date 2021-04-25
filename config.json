@@ -17,7 +17,7 @@
     "options": {
         "simulateRecordData" : {
             "enabled": true,
-            "data": "spotify:album:7acEciVtnuTzmwKptkjth5;"
+            "data": "spotify:album:7acEciVtnuTzmwKptkjth5"
         },
         "simulateRecordTrack" : {
             "enabled": false,

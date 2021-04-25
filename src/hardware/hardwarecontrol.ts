@@ -144,6 +144,13 @@ class HardwareControl {
 const Mfrc522 = require("mfrc522-rpi");
 const SoftSPI = require("rpi-softspi");
 
+var pn532 = require('pn532');
+var i2c = require('i2c');
+ 
+var wire = new i2c(pn532.I2C_ADDRESS, {device: '/dev/i2c-1'});
+var rfid = new pn532.PN532(wire);
+const ndef = require('ndef');
+
 export type Record = {
     uri: string,
     loaded: {
@@ -159,15 +166,6 @@ export type Record = {
  * This class is responsible for managing the record (so scanning the tag AND the track)
  */
 class RecordManager {
-
-    private softSPI = new SoftSPI({
-        clock: 23, // pin number of SCLK
-        mosi: 19, // pin number of MOSI
-        miso: 21, // pin number of MISO
-        client: 24 // pin number of CS
-    });
-
-    private mfrc522 = new Mfrc522(this.softSPI).setResetPin(nconf.get('pins:nfc:reset'))
 
     public state = {
         scanner: {
@@ -209,7 +207,12 @@ class RecordManager {
         }).bind(this));
 
         // Start card reading procedure
-        setInterval( (() => {
+      
+        rfid.on('tag', (function (tag) {
+            this.handleTagChange(tag);
+        }).bind(this));
+      
+        setInterval((() => {
             this.pollTag();
         }).bind(this), 100);
     }
@@ -326,8 +329,29 @@ class RecordManager {
     startScanningTag() {
         this.state.record.loaded.tag = false;
         this.state.scanner.scanningTag = true;
+        this.state.record.uri = null;
 
         logger.info('Started measuring record tag')
+    }
+
+    /**
+     * Handles a tag change
+     */
+    async handleTagChange() {
+        rfid.readNdefData().then(((data) => {
+            var records = ndef.decodeMessage(Array.from(data));
+            logger.info(`Detected records: ${records}`);
+
+            // The uri should be on the first record, looks like this: spotify:track:7KNdhg5DjPyvSeEawXYhlv;
+            var uri = ndef.text.decodePayload(records[0].payload);
+            var splittedData = data.split(';');
+            uri = splittedData[0];
+            logger.info(`Detected URI: ${uri}`);
+            if (this.state.scanner.scanningTag) {
+                this.state.record.uri = uri;
+            }
+
+        }).bind(this));
     }
 
     /**
@@ -338,41 +362,18 @@ class RecordManager {
             return;
         }
 
-        var data = '';
         if (!nconf.get('options:simulateRecordData:enabled')) { // Use hardware
 
-            this.mfrc522.reset();
-
-            let response = this.mfrc522.findCard();
-            if (!response.status) {
+            // Wait for a result of the tag scanning thing
+            if (!this.state.record.uri) {
                 return;
             }
-
-            const uuid = response.data;
-    
-            /**
-             * Fetch data:
-             * Looks like this: spotify:track:7KNdhg5DjPyvSeEawXYhlv; (40 bytes)
-             * 
-             * The chip contains 4 blocks in each sector. The first three are used to write data. Every block contains 16 bytes
-             * Our whole message fits in just 3 blocks!
-             * 
-             * This program uses blocks 8, 9 and 10
-             */
-            for (var i = 8; i <= 10; i++) {
-                var blockData = this.mfrc522.getDataForBlock(i);
-                data += new TextDecoder().decode(Uint8Array.from(blockData));
-            }
-
-            this.mfrc522.stopCrypto();
+          
         } else { // Simulate (mocking the chip)
-            data = nconf.get('options:simulateRecordData:data');
+            this.state.record.uri = nconf.get('options:simulateRecordData:data');
         }
-        
-        var splittedData = data.split(';');
 
-        // Update record and disable itself
-        this.state.record.uri = splittedData[0];
+        // Disable itself
         this.state.record.loaded.tag = true;
 
         logger.info(`Found a new record tag with uri: ${this.state.record.uri}`);
