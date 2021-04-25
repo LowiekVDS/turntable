@@ -9,7 +9,7 @@
             "B": 12           
         },
         "optical": 13,         
-        "motor": 15,
+        "motor": 15
     },
     "options": {
         "simulateRecordData" : {
