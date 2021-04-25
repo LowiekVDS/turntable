@@ -1,6 +1,6 @@
 # Turntable
 ## Installation and running
-Both servers need to run simultaneously to work. 
+Both servers need to run simultaneously to work. You can connect with the raspberry pi by ssh'ing into it (pi@turntable.local)
 ### Turntable server
 Clone this repository, cd to it and run
 ```
