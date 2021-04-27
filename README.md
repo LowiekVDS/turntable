@@ -37,3 +37,4 @@ The configuration page is reachable at http://turntable.local:3000/
 The pinout and settings (to for example mock the tag reading procedure) is available at /config.json
 
 The servers are ran automatically on startup. To stop the processes, run ```sudo pkill -f node```
+When you need to run the processes again, run ```sudo node /home/apps/node-sonos-http-api/server.js & (cd /home/apps/turntable/ && sudo node dist/main)```
