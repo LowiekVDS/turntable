@@ -38,7 +38,7 @@ class HardwareControl {
         gpio.setup(nconf.get('pins:playPausePin'), gpio.DIR_IN, gpio.EDGE_BOTH, ((err, value) => {
             this.defaultGpioCallback(err, value);
 
-            // Set the initial play thing
+            // Set opticalthe initial play thing
             this.readChannel('playPausePin', ((err, value) => {
                 this.defaultGpioCallback(err, value);
                 this.handleOnChange(nconf.get('pins:playPausePin'), value);
@@ -83,6 +83,7 @@ class HardwareControl {
                     }
                 }).bind(this), 500)
             } else {
+                logger.debug("Stopped scanning");
                 this.writeChannel('motor', false);
                 this.recordManager.state.scanner.controllerState = 'ABORTED';
                 this.recordManager.stopScanningTag();
@@ -145,10 +146,10 @@ const Mfrc522 = require("mfrc522-rpi");
 const SoftSPI = require("rpi-softspi");
 
 var pn532 = require('pn532');
-var i2c = require('i2c');
  
-var wire = new i2c(pn532.I2C_ADDRESS, {device: '/dev/i2c-1'});
-var rfid = new pn532.PN532(wire);
+var SerialPort = require('serialport').SerialPort;
+var serialPort = new SerialPort({path: '/dev/serial0', baudRate: 115200, autoOpen: true });
+var rfid = new pn532.PN532(serialPort);
 const ndef = require('ndef');
 
 export type Record = {
@@ -208,9 +209,12 @@ class RecordManager {
 
         // Start card reading procedure
       
-        rfid.on('tag', (function (tag) {
-            this.handleTagChange(tag);
-        }).bind(this));
+        rfid.on('ready', () => {
+            console.log('Listening for a tag scan...');
+            rfid.on('tag', (function (tag) {
+                this.handleTagChange(tag);
+            }).bind(this));
+        })
       
         setInterval((() => {
             this.pollTag();
@@ -270,14 +274,14 @@ class RecordManager {
 
             if (difference > this.state.scanner.pulses.longPulse.maxPeriod + this.state.scanner.pulses.shortPulse.minPeriod) {
                 // Pulse is way too big. Something went wrong, stop measurement and throw result away.
-                logger.debug('Found super long pulse')
+                logger.debug(`Found super long pulse (${difference} ms)`)
                 this.state.scanner.pulses.measuring = false;
 
             } else if (difference >= this.state.scanner.pulses.shortPulse.minPeriod &&
                     difference <= this.state.scanner.pulses.shortPulse.maxPeriod) {
                 
                 // Short pulse found!
-                logger.debug('Found short pulse')
+                logger.debug(`Found short pulse (${difference} ms)`)
                 this.state.scanner.pulses.shortPulse.amount += 1;
                 this.state.scanner.pulses.measuring = false;
 
@@ -285,7 +289,7 @@ class RecordManager {
                     difference <= this.state.scanner.pulses.longPulse.maxPeriod) {
                 
                 // Long pulse found! We can determine track number!
-                logger.debug('Found long pulse')
+                logger.debug(`Found long pulse (${difference} ms)`)
                 this.state.record.selectedTrack = this.state.scanner.pulses.shortPulse.amount;
                 this.state.scanner.pulses.measuring = false;
 
@@ -295,7 +299,7 @@ class RecordManager {
                 this.stopScanningTrack();
             } else {
                 // Probably a false positive, just keep going and ignore new state...
-                logger.debug('Found super short pulse')
+                logger.debug(`Found super short pulse (${difference} ms)`)
                 return;
             }
         }
